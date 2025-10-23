@@ -394,6 +394,7 @@ app.post('/slack/events', async (req, res) => {
     const userId = event.user;
     const text = event.text;
     const channel = event.channel;
+    const ts = event.ts;
     
     console.log(`User ${userId} mentioned Arnold: ${text}`);
     
@@ -403,6 +404,7 @@ app.post('/slack/events', async (req, res) => {
         user_id: userId,
         message: text,
         channel: channel,
+        ts: ts,
         event_type: 'app_mention'
       });
     } catch (error) {
