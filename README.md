@@ -11,31 +11,23 @@ Handles Slack interactions and Google OAuth for Arnold The Analyst.
 - MCP_API_KEY
 - N8N_WEBHOOK_URL
 - PORT (auto-set by Railway)
-```
 
----
+## Endpoints
 
-### Step 1.2: Deploy to Railway
+### Slash Commands
+- POST `/slack/commands/connect` - /arnold-connect
+- POST `/slack/commands/status` - /arnold-status
+- POST `/slack/commands/disconnect` - /arnold-disconnect
+- POST `/slack/commands/property` - /arnold-property
 
-1. Push to GitHub
-2. Railway → New Project → Deploy from GitHub
-3. Select `arnold-slack-backend`
-4. Add environment variables:
-   - `GOOGLE_CLIENT_ID`: Your Google OAuth Client ID
-   - `GOOGLE_CLIENT_SECRET`: Your Google OAuth Secret
-   - `GOOGLE_REDIRECT_URI`: `https://YOUR-SLACK-BACKEND-URL.up.railway.app/oauth/google/callback`
-   - `MCP_SERVER_URL`: `https://arnold-mcp-server-production.up.railway.app`
-   - `MCP_API_KEY`: `cf9b2953-62b8-4e66-846f-eba4f924f0eb`
-   - `N8N_WEBHOOK_URL`: Your n8n webhook URL (we'll create this)
-5. Generate domain
-6. Copy the URL (e.g., `arnold-slack-backend-production.up.railway.app`)
+### OAuth
+- GET `/oauth/google/callback` - Google OAuth callback
 
----
+### Interactivity
+- POST `/slack/interactions` - Handle button/menu clicks
 
-## Phase 2: Update Google Cloud OAuth Settings (5 minutes)
+### Events
+- POST `/slack/events` - Handle @mentions and messages
 
-1. Go to Google Cloud Console → Credentials
-2. Click your OAuth Client ID
-3. Under "Authorized redirect URIs", add:
-```
-   https://arnold-slack-backend-production.up.railway.app/oauth/google/callback
+### Health
+- GET `/health` - Health check endpoint
