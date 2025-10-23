@@ -149,6 +149,48 @@ app.post('/slack/commands/disconnect', async (req, res) => {
   }
 });
 
+// /arnold-property command
+app.post('/slack/commands/property', async (req, res) => {
+  const { user_id, text } = req.body;
+  const propertyId = text.trim();
+  
+  if (!propertyId) {
+    return res.json({
+      response_type: 'ephemeral',
+      text: 'Usage: `/arnold-property properties/123456789` or `/arnold-property 123456789`'
+    });
+  }
+  
+  // Format property ID
+  const formattedPropertyId = propertyId.startsWith('properties/') 
+    ? propertyId 
+    : `properties/${propertyId}`;
+  
+  try {
+    await axios.patch(
+      `${process.env.MCP_SERVER_URL}/users/${user_id}/property`,
+      { propertyId: formattedPropertyId },
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          'X-API-Key': process.env.MCP_API_KEY
+        }
+      }
+    );
+    
+    res.json({
+      response_type: 'ephemeral',
+      text: `✅ Property set to: \`${formattedPropertyId}\`\n\nYou're all set! Ask Arnold a question like:\n"@Arnold show me sessions by country last week"`
+    });
+    
+  } catch (error) {
+    res.json({
+      response_type: 'ephemeral',
+      text: `❌ Error: ${error.message}`
+    });
+  }
+});
+
 // ==========================================
 // GOOGLE OAUTH CALLBACK
 // ==========================================
@@ -249,10 +291,9 @@ app.get('/oauth/google/callback', async (req, res) => {
                 <h3>📋 Next Steps:</h3>
                 <ol>
                   <li>Return to Slack</li>
-                  <li>Use the interactive menu to select your GA4 property</li>
+                  <li>Use <code>/arnold-property 509119162</code> to set your property</li>
                   <li>Start asking Arnold questions!</li>
                 </ol>
-                <p><strong>Or use:</strong> <code>/arnold-property</code> to set your property manually</p>
               </div>
               
               <p style="margin-top: 30px; color: #666; font-size: 14px;">
@@ -262,9 +303,6 @@ app.get('/oauth/google/callback', async (req, res) => {
           </body>
         </html>
       `);
-      
-      // Also send a Slack message to the user
-      // (Optional - requires Slack webhook or bot token)
       
     } else {
       throw new Error('Failed to store tokens');
@@ -379,11 +417,3 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`📊 Health check: http://localhost:${PORT}/health`);
   console.log(`🔗 OAuth callback: ${process.env.GOOGLE_REDIRECT_URI}`);
 });
-```
-
-**File 3: `.gitignore`**
-```
-node_modules/
-.env
-.DS_Store
-*.log
