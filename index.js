@@ -23,6 +23,28 @@ app.get('/health', (req, res) => {
   res.json({ status: 'healthy', service: 'arnold-slack-backend' });
 });
 
+// Helper function to send Slack message
+async function sendSlackMessage(channel, blocks) {
+  try {
+    await axios.post(
+      'https://slack.api.com/api/chat.postMessage',
+      {
+        channel: channel,
+        blocks: blocks
+      },
+      {
+        headers: {
+          'Authorization': `Bearer ${process.env.SLACK_BOT_TOKEN}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+    console.log(`Slack message sent to ${channel}`);
+  } catch (error) {
+    console.error('Error sending Slack message:', error.response?.data || error.message);
+  }
+}
+
 // ==========================================
 // SLACK SLASH COMMANDS
 // ==========================================
@@ -35,15 +57,15 @@ app.post('/slack/commands/connect', async (req, res) => {
   
   // Generate Google OAuth URL with user's Slack ID as state
   const authUrl = oauth2Client.generateAuthUrl({
-  access_type: 'offline',
-  scope: [
-    'https://www.googleapis.com/auth/analytics.readonly',
-    'https://www.googleapis.com/auth/analytics.manage.users.readonly', // Added for property access
-    'https://www.googleapis.com/auth/userinfo.email'
-  ],
-  prompt: 'consent',
-  state: user_id
-});
+    access_type: 'offline',
+    scope: [
+      'https://www.googleapis.com/auth/analytics.readonly',
+      'https://www.googleapis.com/auth/analytics.manage.users.readonly',
+      'https://www.googleapis.com/auth/userinfo.email'
+    ],
+    prompt: 'consent',
+    state: user_id // Pass Slack user ID
+  });
   
   // Send ephemeral message to user with connect button
   res.json({
@@ -110,7 +132,7 @@ app.post('/slack/commands/status', async (req, res) => {
             type: 'section',
             text: {
               type: 'mrkdwn',
-              text: `✅ *Google Analytics Connected*\n\n• Status: ${isExpired ? '⚠️ Token expired - please reconnect' : '✅ Active'}\n• Property: ${propertyId || '⚠️ Not set - use /arnold-property'}`
+              text: `✅ *Google Analytics Connected*\n\n• Status: ${isExpired ? '⚠️ Token expired - please reconnect' : '✅ Active'}\n• Property: ${propertyId || '⚠️ Not set - use /arnold-connect to select'}`
             }
           }
         ]
@@ -150,7 +172,7 @@ app.post('/slack/commands/disconnect', async (req, res) => {
   }
 });
 
-// /arnold-property command
+// /arnold-property command (manual fallback)
 app.post('/slack/commands/property', async (req, res) => {
   const { user_id, text } = req.body;
   const propertyId = text.trim();
@@ -230,7 +252,7 @@ app.get('/oauth/google/callback', async (req, res) => {
         accessToken: tokens.access_token,
         refreshToken: tokens.refresh_token,
         expiresIn: tokens.expiry_date ? Math.floor((tokens.expiry_date - Date.now()) / 1000) : 3600,
-        propertyId: null // User will set this next
+        propertyId: null // Will be set after user selects from dropdown
       },
       {
         headers: {
@@ -243,7 +265,88 @@ app.get('/oauth/google/callback', async (req, res) => {
     if (storeResponse.data.success) {
       console.log(`Tokens stored successfully for user ${slackUserId}`);
       
-      // Success page with property selection instructions
+      // Fetch user's GA4 properties
+      let properties = [];
+      
+      try {
+        const propertiesResponse = await axios.get(
+          `${process.env.MCP_SERVER_URL}/users/${slackUserId}/properties`,
+          {
+            headers: {
+              'X-API-Key': process.env.MCP_API_KEY
+            }
+          }
+        );
+        
+        if (propertiesResponse.data.success) {
+          properties = propertiesResponse.data.properties;
+          console.log(`Found ${properties.length} properties for user ${slackUserId}`);
+        }
+      } catch (error) {
+        console.error('Error fetching properties:', error.response?.data || error.message);
+      }
+      
+      // Send property selector to Slack
+      if (properties.length > 0) {
+        // Build dropdown options
+        const options = properties.map(prop => ({
+          text: {
+            type: 'plain_text',
+            text: `${prop.name} (${prop.account})`,
+            emoji: true
+          },
+          value: prop.id
+        }));
+        
+        // Send interactive message to user's DM
+        await sendSlackMessage(slackUserId, [
+          {
+            type: 'section',
+            text: {
+              type: 'mrkdwn',
+              text: '🎉 *Google Analytics Connected Successfully!*\n\nPlease select which Google Analytics property you\'d like Arnold to use:'
+            }
+          },
+          {
+            type: 'actions',
+            block_id: 'property_selection',
+            elements: [
+              {
+                type: 'static_select',
+                action_id: 'select_property',
+                placeholder: {
+                  type: 'plain_text',
+                  text: 'Select a property...',
+                  emoji: true
+                },
+                options: options.slice(0, 100) // Slack limit
+              }
+            ]
+          },
+          {
+            type: 'context',
+            elements: [
+              {
+                type: 'mrkdwn',
+                text: `Found ${properties.length} ${properties.length === 1 ? 'property' : 'properties'}`
+              }
+            ]
+          }
+        ]);
+      } else {
+        // No properties found - send manual setup message
+        await sendSlackMessage(slackUserId, [
+          {
+            type: 'section',
+            text: {
+              type: 'mrkdwn',
+              text: '⚠️ *Google Analytics Connected*\n\nWe couldn\'t automatically find your GA4 properties. Please set your property manually:\n\n`/arnold-property properties/YOUR_PROPERTY_ID`'
+            }
+          }
+        ]);
+      }
+      
+      // Success page
       res.send(`
         <html>
           <head>
@@ -266,37 +369,15 @@ app.get('/oauth/google/callback', async (req, res) => {
               }
               h1 { color: #4CAF50; margin-bottom: 10px; }
               p { line-height: 1.6; }
-              code {
-                background: #f4f4f4;
-                padding: 4px 8px;
-                border-radius: 4px;
-                font-family: 'Courier New', monospace;
-              }
-              .next-steps {
-                text-align: left;
-                margin-top: 30px;
-                padding: 20px;
-                background: #f9f9f9;
-                border-radius: 5px;
-              }
-              .next-steps h3 { margin-top: 0; }
-              .next-steps ol { padding-left: 20px; }
             </style>
           </head>
           <body>
             <div class="container">
               <h1>✅ Successfully Connected!</h1>
               <p>Your Google Analytics account is now connected to Arnold.</p>
-              
-              <div class="next-steps">
-                <h3>📋 Next Steps:</h3>
-                <ol>
-                  <li>Return to Slack</li>
-                  <li>Use <code>/arnold-property 509119162</code> to set your property</li>
-                  <li>Start asking Arnold questions!</li>
-                </ol>
-              </div>
-              
+              <p style="margin-top: 30px;">
+                <strong>Return to Slack</strong> to select your GA4 property from the dropdown.
+              </p>
               <p style="margin-top: 30px; color: #666; font-size: 14px;">
                 You can close this window now.
               </p>
@@ -332,18 +413,24 @@ app.get('/oauth/google/callback', async (req, res) => {
 app.post('/slack/interactions', async (req, res) => {
   const payload = JSON.parse(req.body.payload);
   
+  // Acknowledge immediately
+  res.sendStatus(200);
+  
   if (payload.type === 'block_actions') {
     const action = payload.actions[0];
     
     if (action.action_id === 'select_property') {
-      const selectedProperty = action.selected_option.value;
+      const selectedPropertyId = action.selected_option.value;
+      const selectedPropertyName = action.selected_option.text.text;
       const userId = payload.user.id;
       
+      console.log(`User ${userId} selected property: ${selectedPropertyId}`);
+      
       try {
-        // Update property in MCP server
+        // Update property in MCP server database
         await axios.patch(
           `${process.env.MCP_SERVER_URL}/users/${userId}/property`,
-          { propertyId: selectedProperty },
+          { propertyId: selectedPropertyId },
           {
             headers: {
               'Content-Type': 'application/json',
@@ -352,25 +439,37 @@ app.post('/slack/interactions', async (req, res) => {
           }
         );
         
-        // Acknowledge the action
-        res.json({
-          response_type: 'ephemeral',
-          replace_original: false,
-          text: `✅ Property set to: ${selectedProperty}\n\nYou can now ask Arnold questions like:\n• "Show me active users by country this month"\n• "What's my traffic from last week?"\n• "Top 10 pages by views"`
-        });
+        // Send confirmation message
+        await sendSlackMessage(userId, [
+          {
+            type: 'section',
+            text: {
+              type: 'mrkdwn',
+              text: `✅ *Property Set Successfully!*\n\n${selectedPropertyName}\n\`${selectedPropertyId}\``
+            }
+          },
+          {
+            type: 'section',
+            text: {
+              type: 'mrkdwn',
+              text: '🚀 *You\'re all set!* Try asking Arnold:\n• "@Arnold show me sessions last month"\n• "@Arnold top 10 pages by views"\n• "@Arnold users by country this week"'
+            }
+          }
+        ]);
         
       } catch (error) {
-        res.json({
-          response_type: 'ephemeral',
-          text: '❌ Error setting property. Please try again.'
-        });
+        console.error('Error setting property:', error);
+        await sendSlackMessage(userId, [
+          {
+            type: 'section',
+            text: {
+              type: 'mrkdwn',
+              text: '❌ *Error setting property*\n\nPlease try again or use `/arnold-property YOUR_ID` manually.'
+            }
+          }
+        ]);
       }
     }
-  }
-  
-  // Acknowledge other interactions
-  if (!res.headersSent) {
-    res.sendStatus(200);
   }
 });
 
