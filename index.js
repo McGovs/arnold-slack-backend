@@ -26,8 +26,8 @@ app.get('/health', (req, res) => {
 // Helper function to send Slack message
 async function sendSlackMessage(channel, blocks) {
   try {
-    await axios.post(
-      'https://slack.api.com/api/chat.postMessage',
+    const response = await axios.post(
+      'https://slack.com/api/chat.postMessage',  // ← FIXED URL
       {
         channel: channel,
         blocks: blocks
@@ -39,7 +39,12 @@ async function sendSlackMessage(channel, blocks) {
         }
       }
     );
-    console.log(`Slack message sent to ${channel}`);
+    
+    if (!response.data.ok) {
+      console.error('Slack API error:', response.data.error);
+    } else {
+      console.log(`Slack message sent to ${channel}`);
+    }
   } catch (error) {
     console.error('Error sending Slack message:', error.response?.data || error.message);
   }
@@ -267,8 +272,10 @@ app.get('/oauth/google/callback', async (req, res) => {
       
       // Fetch user's GA4 properties
       let properties = [];
+      let fetchError = null;
       
       try {
+        console.log('Fetching properties from MCP server...');
         const propertiesResponse = await axios.get(
           `${process.env.MCP_SERVER_URL}/users/${slackUserId}/properties`,
           {
@@ -281,9 +288,13 @@ app.get('/oauth/google/callback', async (req, res) => {
         if (propertiesResponse.data.success) {
           properties = propertiesResponse.data.properties;
           console.log(`Found ${properties.length} properties for user ${slackUserId}`);
+        } else {
+          fetchError = propertiesResponse.data.error;
+          console.error('MCP server returned error:', fetchError);
         }
       } catch (error) {
-        console.error('Error fetching properties:', error.response?.data || error.message);
+        fetchError = error.response?.data?.error || error.message;
+        console.error('Error fetching properties:', fetchError);
       }
       
       // Send property selector to Slack
@@ -299,6 +310,7 @@ app.get('/oauth/google/callback', async (req, res) => {
         }));
         
         // Send interactive message to user's DM
+        console.log(`Sending property dropdown to user ${slackUserId}`);
         await sendSlackMessage(slackUserId, [
           {
             type: 'section',
@@ -334,13 +346,14 @@ app.get('/oauth/google/callback', async (req, res) => {
           }
         ]);
       } else {
-        // No properties found - send manual setup message
+        // No properties found or error - send manual setup message
+        console.log('No properties found, sending manual setup instructions');
         await sendSlackMessage(slackUserId, [
           {
             type: 'section',
             text: {
               type: 'mrkdwn',
-              text: '⚠️ *Google Analytics Connected*\n\nWe couldn\'t automatically find your GA4 properties. Please set your property manually:\n\n`/arnold-property properties/YOUR_PROPERTY_ID`'
+              text: `⚠️ *Google Analytics Connected*\n\n${fetchError ? `Error: ${fetchError}\n\n` : ''}We couldn\'t automatically find your GA4 properties. Please set your property manually:\n\n\`/arnold-property properties/509119162\`\n\n*(Replace with your actual property ID)*`
             }
           }
         ]);
@@ -376,7 +389,7 @@ app.get('/oauth/google/callback', async (req, res) => {
               <h1>✅ Successfully Connected!</h1>
               <p>Your Google Analytics account is now connected to Arnold.</p>
               <p style="margin-top: 30px;">
-                <strong>Return to Slack</strong> to select your GA4 property from the dropdown.
+                <strong>Return to Slack</strong> ${properties.length > 0 ? 'to select your GA4 property from the dropdown' : 'and use /arnold-property to set your property ID'}.
               </p>
               <p style="margin-top: 30px; color: #666; font-size: 14px;">
                 You can close this window now.
