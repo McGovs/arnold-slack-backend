@@ -377,7 +377,7 @@ app.post('/slack/interactions', async (req, res) => {
 // APP MENTIONS & MESSAGES
 // ==========================================
 
-// Handle @Arnold mentions
+// Handle @Arnold mentions and regular messages
 app.post('/slack/events', async (req, res) => {
   const { type, challenge, event } = req.body;
   
@@ -389,12 +389,15 @@ app.post('/slack/events', async (req, res) => {
   // Acknowledge event immediately
   res.sendStatus(200);
   
-  // Process event asynchronously
+  // Process @Arnold mentions
   if (event && event.type === 'app_mention') {
     const userId = event.user;
     const text = event.text;
     const channel = event.channel;
     const ts = event.ts;
+    
+    // Clean the message - remove user mentions
+    const cleanText = text.replace(/<@[A-Z0-9]+>/g, '').trim();
     
     console.log(`User ${userId} mentioned Arnold: ${text}`);
     
@@ -402,13 +405,48 @@ app.post('/slack/events', async (req, res) => {
     try {
       await axios.post(process.env.N8N_WEBHOOK_URL, {
         user_id: userId,
-        message: text,
+        message: cleanText,
+        original_message: text,
         channel: channel,
         ts: ts,
         event_type: 'app_mention'
       });
     } catch (error) {
       console.error('Error triggering n8n:', error);
+    }
+  }
+  
+  // Handle regular messages (not just mentions)
+  if (event && event.type === 'message' && event.subtype === undefined) {
+    // Ignore messages from bots (including Arnold himself)
+    if (event.bot_id) {
+      return;
+    }
+    
+    const userId = event.user;
+    const text = event.text;
+    const channel = event.channel;
+    const ts = event.ts;
+    
+    // Only process if Arnold is mentioned or in DM
+    if (text.includes('arnold') || text.includes('Arnold') || event.channel_type === 'im') {
+      // Clean the message - remove user mentions
+      const cleanText = text.replace(/<@[A-Z0-9]+>/g, '').trim();
+      
+      console.log(`User ${userId} messaged: ${text}`);
+      
+      try {
+        await axios.post(process.env.N8N_WEBHOOK_URL, {
+          user_id: userId,
+          message: cleanText,
+          original_message: text,
+          channel: channel,
+          ts: ts,
+          event_type: 'message'
+        });
+      } catch (error) {
+        console.error('Error triggering n8n:', error);
+      }
     }
   }
 });
