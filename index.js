@@ -35,14 +35,15 @@ app.post('/slack/commands/connect', async (req, res) => {
   
   // Generate Google OAuth URL with user's Slack ID as state
   const authUrl = oauth2Client.generateAuthUrl({
-    access_type: 'offline',
-    scope: [
-      'https://www.googleapis.com/auth/analytics.readonly',
-      'https://www.googleapis.com/auth/userinfo.email'
-    ],
-    prompt: 'consent',
-    state: user_id // Pass Slack user ID
-  });
+  access_type: 'offline',
+  scope: [
+    'https://www.googleapis.com/auth/analytics.readonly',
+    'https://www.googleapis.com/auth/analytics.manage.users.readonly', // Added for property access
+    'https://www.googleapis.com/auth/userinfo.email'
+  ],
+  prompt: 'consent',
+  state: user_id
+});
   
   // Send ephemeral message to user with connect button
   res.json({
