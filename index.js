@@ -27,7 +27,7 @@ app.get('/health', (req, res) => {
 async function sendSlackMessage(channel, blocks) {
   try {
     const response = await axios.post(
-      'https://slack.com/api/chat.postMessage',  // ← FIXED URL
+      'https://slack.com/api/chat.postMessage',
       {
         channel: channel,
         blocks: blocks
@@ -129,6 +129,7 @@ app.post('/slack/commands/status', async (req, res) => {
     if (response.data.success) {
       const isExpired = response.data.isExpired;
       const propertyId = response.data.propertyId;
+      const bigqueryDataset = response.data.bigqueryDataset;
       
       res.json({
         response_type: 'ephemeral',
@@ -137,7 +138,7 @@ app.post('/slack/commands/status', async (req, res) => {
             type: 'section',
             text: {
               type: 'mrkdwn',
-              text: `✅ *Google Analytics Connected*\n\n• Status: ${isExpired ? '⚠️ Token expired - please reconnect' : '✅ Active'}\n• Property: ${propertyId || '⚠️ Not set - use /arnold-connect to select'}`
+              text: `✅ *Google Analytics Connected*\n\n• Status: ${isExpired ? '⚠️ Token expired - please reconnect' : '✅ Active'}\n• GA4 Property: ${propertyId || '⚠️ Not set'}\n• BigQuery Dataset: ${bigqueryDataset || '⚠️ Not set'}`
             }
           }
         ]
@@ -209,6 +210,140 @@ app.post('/slack/commands/property', async (req, res) => {
     res.json({
       response_type: 'ephemeral',
       text: `✅ Property set to: \`${formattedPropertyId}\`\n\nYou're all set! Ask Arnold a question like:\n"@Arnold show me sessions by country last week"`
+    });
+    
+  } catch (error) {
+    res.json({
+      response_type: 'ephemeral',
+      text: `❌ Error: ${error.message}`
+    });
+  }
+});
+
+// /arnold-bigquery-connect command
+app.post('/slack/commands/bigquery-connect', async (req, res) => {
+  const { user_id, user_name } = req.body;
+  
+  console.log(`User ${user_name} (${user_id}) requested to connect BigQuery`);
+  
+  // Acknowledge immediately
+  res.json({
+    response_type: 'ephemeral',
+    text: '🔍 Fetching your BigQuery datasets...'
+  });
+  
+  // Fetch datasets and send dropdown asynchronously
+  try {
+    const datasetsResponse = await axios.get(
+      `${process.env.MCP_SERVER_URL}/users/${user_id}/datasets`,
+      {
+        headers: {
+          'X-API-Key': process.env.MCP_API_KEY
+        }
+      }
+    );
+    
+    if (datasetsResponse.data.success && datasetsResponse.data.datasets.length > 0) {
+      const datasets = datasetsResponse.data.datasets;
+      
+      // Build dropdown options
+      const options = datasets.map(ds => ({
+        text: {
+          type: 'plain_text',
+          text: `${ds.name} (${ds.projectId})`,
+          emoji: true
+        },
+        value: ds.fullPath
+      }));
+      
+      // Send interactive message
+      await sendSlackMessage(user_id, [
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: '📊 *Select Your BigQuery Dataset*\n\nChoose which dataset Arnold should use for SQL queries:'
+          }
+        },
+        {
+          type: 'actions',
+          block_id: 'bigquery_dataset_selection',
+          elements: [
+            {
+              type: 'static_select',
+              action_id: 'select_bigquery_dataset',
+              placeholder: {
+                type: 'plain_text',
+                text: 'Select a dataset...',
+                emoji: true
+              },
+              options: options.slice(0, 100)
+            }
+          ]
+        },
+        {
+          type: 'context',
+          elements: [
+            {
+              type: 'mrkdwn',
+              text: `Found ${datasets.length} ${datasets.length === 1 ? 'dataset' : 'datasets'} accessible by Arnold's service account`
+            }
+          ]
+        }
+      ]);
+    } else {
+      // No datasets found
+      await sendSlackMessage(user_id, [
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: '⚠️ *No BigQuery Datasets Found*\n\nMake sure you\'ve granted Arnold\'s service account access to your BigQuery datasets.\n\nService Account:\n`' + (process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || 'Check Railway for service account email') + '`\n\nOr set manually:\n`/arnold-bigquery-dataset project-id.dataset_id`'
+          }
+        }
+      ]);
+    }
+  } catch (error) {
+    console.error('Error fetching datasets:', error);
+    await sendSlackMessage(user_id, [
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: '❌ *Error Fetching Datasets*\n\nCouldn\'t retrieve BigQuery datasets. Please try again or set manually:\n`/arnold-bigquery-dataset project-id.dataset_id`'
+        }
+      }
+    ]);
+  }
+});
+
+// /arnold-bigquery-dataset command (manual fallback)
+app.post('/slack/commands/bigquery-dataset', async (req, res) => {
+  const { user_id, text } = req.body;
+  const dataset = text.trim();
+  
+  if (!dataset) {
+    return res.json({
+      response_type: 'ephemeral',
+      text: 'Usage: `/arnold-bigquery-dataset project-id.dataset_id`\n\nExample: `/arnold-bigquery-dataset bigquery-public-data.ga4_obfuscated_sample_ecommerce`'
+    });
+  }
+  
+  try {
+    await axios.patch(
+      `${process.env.MCP_SERVER_URL}/users/${user_id}/dataset`,
+      { dataset: dataset },
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          'X-API-Key': process.env.MCP_API_KEY
+        }
+      }
+    );
+    
+    res.json({
+      response_type: 'ephemeral',
+      text: `✅ BigQuery dataset set to: \`${dataset}\`\n\nArnold will use this dataset for SQL queries.\n\nYou can reference tables like:\n\`${dataset}.events_*\``
     });
     
   } catch (error) {
@@ -381,7 +516,7 @@ app.get('/oauth/google/callback', async (req, res) => {
                 box-shadow: 0 10px 40px rgba(0,0,0,0.2);
               }
               h1 { color: #4CAF50; margin-bottom: 10px; }
-              p { line-height: 1.6; }
+              p { line-width: 1.6; }
             </style>
           </head>
           <body>
@@ -419,7 +554,7 @@ app.get('/oauth/google/callback', async (req, res) => {
 });
 
 // ==========================================
-// INTERACTIVE COMPONENTS (Property Selection)
+// INTERACTIVE COMPONENTS (Property & Dataset Selection)
 // ==========================================
 
 // Handle interactive button/menu clicks
@@ -432,6 +567,7 @@ app.post('/slack/interactions', async (req, res) => {
   if (payload.type === 'block_actions') {
     const action = payload.actions[0];
     
+    // GA4 Property Selection
     if (action.action_id === 'select_property') {
       const selectedPropertyId = action.selected_option.value;
       const selectedPropertyName = action.selected_option.text.text;
@@ -440,7 +576,6 @@ app.post('/slack/interactions', async (req, res) => {
       console.log(`User ${userId} selected property: ${selectedPropertyId}`);
       
       try {
-        // Update property in MCP server database
         await axios.patch(
           `${process.env.MCP_SERVER_URL}/users/${userId}/property`,
           { propertyId: selectedPropertyId },
@@ -452,7 +587,6 @@ app.post('/slack/interactions', async (req, res) => {
           }
         );
         
-        // Send confirmation message
         await sendSlackMessage(userId, [
           {
             type: 'section',
@@ -478,6 +612,57 @@ app.post('/slack/interactions', async (req, res) => {
             text: {
               type: 'mrkdwn',
               text: '❌ *Error setting property*\n\nPlease try again or use `/arnold-property YOUR_ID` manually.'
+            }
+          }
+        ]);
+      }
+    }
+    
+    // BigQuery Dataset Selection
+    if (action.action_id === 'select_bigquery_dataset') {
+      const selectedDataset = action.selected_option.value;
+      const selectedDatasetName = action.selected_option.text.text;
+      const userId = payload.user.id;
+      
+      console.log(`User ${userId} selected BigQuery dataset: ${selectedDataset}`);
+      
+      try {
+        await axios.patch(
+          `${process.env.MCP_SERVER_URL}/users/${userId}/dataset`,
+          { dataset: selectedDataset },
+          {
+            headers: {
+              'Content-Type': 'application/json',
+              'X-API-Key': process.env.MCP_API_KEY
+            }
+          }
+        );
+        
+        await sendSlackMessage(userId, [
+          {
+            type: 'section',
+            text: {
+              type: 'mrkdwn',
+              text: `✅ *BigQuery Dataset Set Successfully!*\n\n${selectedDatasetName}\n\`${selectedDataset}\``
+            }
+          },
+          {
+            type: 'section',
+            text: {
+              type: 'mrkdwn',
+              text: `🚀 *Ready for SQL queries!*\n\nYou can now ask Arnold to query this dataset:\n• "@Arnold #bigquery show me top events"\n• "@Arnold #bigquery count users by country"\n\nArnold will automatically use:\n\`${selectedDataset}.events_*\``
+            }
+          }
+        ]);
+        
+      } catch (error) {
+        console.error('Error setting dataset:', error);
+        await sendSlackMessage(userId, [
+          {
+            type: 'section',
+            text: {
+              type: 'mrkdwn',
+              text: '❌ *Error setting dataset*\n\nPlease try again or use `/arnold-bigquery-dataset YOUR_DATASET` manually.'
             }
           }
         ]);
