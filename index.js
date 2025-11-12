@@ -2,6 +2,7 @@ import express from 'express';
 import axios from 'axios';
 import { OAuth2Client } from 'google-auth-library';
 import dotenv from 'dotenv';
+import { saveInstallation, getBotToken } from './db.js';
 
 dotenv.config();
 
@@ -23,9 +24,20 @@ app.get('/health', (req, res) => {
   res.json({ status: 'healthy', service: 'arnold-slack-backend' });
 });
 
-// Helper function to send Slack message
-async function sendSlackMessage(channel, blocks) {
+// Helper function to send Slack message with workspace-specific token
+async function sendSlackMessage(channel, blocks, teamId = null) {
   try {
+    // If teamId is provided, get the bot token for that team
+    // If not, fall back to the default token (for backward compatibility)
+    let botToken = process.env.SLACK_BOT_TOKEN;
+    
+    if (teamId) {
+      const teamToken = await getBotToken(teamId);
+      if (teamToken) {
+        botToken = teamToken;
+      }
+    }
+    
     const response = await axios.post(
       'https://slack.com/api/chat.postMessage',
       {
@@ -34,7 +46,7 @@ async function sendSlackMessage(channel, blocks) {
       },
       {
         headers: {
-          'Authorization': `Bearer ${process.env.SLACK_BOT_TOKEN}`,
+          'Authorization': `Bearer ${botToken}`,
           'Content-Type': 'application/json'
         }
       }
@@ -50,15 +62,22 @@ async function sendSlackMessage(channel, blocks) {
   }
 }
 
+// Helper function to get team ID from user context
+// This will be passed from Slack webhook payloads
+async function getTeamIdFromRequest(req) {
+  // Slack sends team_id in most webhook payloads
+  return req.body.team_id || req.body.team?.id || null;
+}
+
 // ==========================================
 // SLACK SLASH COMMANDS
 // ==========================================
 
 // /arnold-connect command
 app.post('/slack/commands/connect', async (req, res) => {
-  const { user_id, user_name } = req.body;
+  const { user_id, user_name, team_id } = req.body;
   
-  console.log(`User ${user_name} (${user_id}) requested to connect Google Analytics`);
+  console.log(`User ${user_name} (${user_id}) from team ${team_id} requested to connect Google Analytics`);
   
   // Generate Google OAuth URL with user's Slack ID as state
   const authUrl = oauth2Client.generateAuthUrl({
@@ -69,7 +88,7 @@ app.post('/slack/commands/connect', async (req, res) => {
       'https://www.googleapis.com/auth/userinfo.email'
     ],
     prompt: 'consent',
-    state: user_id // Pass Slack user ID
+    state: `${user_id}:${team_id}` // Pass both user ID and team ID
   });
   
   // Send ephemeral message to user with connect button
@@ -222,9 +241,9 @@ app.post('/slack/commands/property', async (req, res) => {
 
 // /arnold-bigquery-connect command
 app.post('/slack/commands/bigquery-connect', async (req, res) => {
-  const { user_id, user_name } = req.body;
+  const { user_id, user_name, team_id } = req.body;
   
-  console.log(`User ${user_name} (${user_id}) requested to connect BigQuery`);
+  console.log(`User ${user_name} (${user_id}) from team ${team_id} requested to connect BigQuery`);
   
   // Acknowledge immediately
   res.json({
@@ -256,7 +275,7 @@ app.post('/slack/commands/bigquery-connect', async (req, res) => {
         value: ds.fullPath
       }));
       
-      // Send interactive message
+      // Send interactive message with team-specific token
       await sendSlackMessage(user_id, [
         {
           type: 'section',
@@ -290,7 +309,7 @@ app.post('/slack/commands/bigquery-connect', async (req, res) => {
             }
           ]
         }
-      ]);
+      ], team_id);
     } else {
       // No datasets found
       await sendSlackMessage(user_id, [
@@ -301,7 +320,7 @@ app.post('/slack/commands/bigquery-connect', async (req, res) => {
             text: '⚠️ *No BigQuery Datasets Found*\n\nMake sure you\'ve granted Arnold\'s service account access to your BigQuery datasets.\n\nService Account:\n`' + (process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || 'Check Railway for service account email') + '`\n\nOr set manually:\n`/arnold-bigquery-dataset project-id.dataset_id`'
           }
         }
-      ]);
+      ], team_id);
     }
   } catch (error) {
     console.error('Error fetching datasets:', error);
@@ -313,7 +332,7 @@ app.post('/slack/commands/bigquery-connect', async (req, res) => {
           text: '❌ *Error Fetching Datasets*\n\nCouldn\'t retrieve BigQuery datasets. Please try again or set manually:\n`/arnold-bigquery-dataset project-id.dataset_id`'
         }
       }
-    ]);
+    ], team_id);
   }
 });
 
@@ -360,7 +379,9 @@ app.post('/slack/commands/bigquery-dataset', async (req, res) => {
 
 app.get('/oauth/google/callback', async (req, res) => {
   const { code, state, error } = req.query;
-  const slackUserId = state; // The Slack user ID we passed as state
+  
+  // Extract user ID and team ID from state
+  const [slackUserId, teamId] = state ? state.split(':') : [null, null];
   
   if (error) {
     console.error('OAuth error:', error);
@@ -376,8 +397,19 @@ app.get('/oauth/google/callback', async (req, res) => {
     `);
   }
   
+  if (!slackUserId || !teamId) {
+    return res.send(`
+      <html>
+        <body style="font-family: Arial; text-align: center; padding: 50px;">
+          <h1>❌ Invalid Request</h1>
+          <p>Missing user or team information.</p>
+        </body>
+      </html>
+    `);
+  }
+  
   try {
-    console.log(`Processing OAuth callback for user ${slackUserId}`);
+    console.log(`Processing OAuth callback for user ${slackUserId} in team ${teamId}`);
     
     // Exchange authorization code for tokens
     const { tokens } = await oauth2Client.getToken(code);
@@ -432,7 +464,7 @@ app.get('/oauth/google/callback', async (req, res) => {
         console.error('Error fetching properties:', fetchError);
       }
       
-      // Send property selector to Slack
+      // Send property selector to Slack with correct team token
       if (properties.length > 0) {
         // Build dropdown options
         const options = properties.map(prop => ({
@@ -445,7 +477,7 @@ app.get('/oauth/google/callback', async (req, res) => {
         }));
         
         // Send interactive message to user's DM
-        console.log(`Sending property dropdown to user ${slackUserId}`);
+        console.log(`Sending property dropdown to user ${slackUserId} in team ${teamId}`);
         await sendSlackMessage(slackUserId, [
           {
             type: 'section',
@@ -479,7 +511,7 @@ app.get('/oauth/google/callback', async (req, res) => {
               }
             ]
           }
-        ]);
+        ], teamId);
       } else {
         // No properties found or error - send manual setup message
         console.log('No properties found, sending manual setup instructions');
@@ -491,7 +523,7 @@ app.get('/oauth/google/callback', async (req, res) => {
               text: `⚠️ *Google Analytics Connected*\n\n${fetchError ? `Error: ${fetchError}\n\n` : ''}We couldn\'t automatically find your GA4 properties. Please set your property manually:\n\n\`/arnold-property properties/509119162\`\n\n*(Replace with your actual property ID)*`
             }
           }
-        ]);
+        ], teamId);
       }
       
       // Success page
@@ -622,11 +654,14 @@ app.get('/slack/oauth/callback', async (req, res) => {
       installedBy: installation.installedBy
     });
 
-    // TODO: Save installation to your database
-    // For now, we'll just log it - you'll need to implement database storage
-    // Example: await saveInstallationToDatabase(installation);
-    
-    console.log('IMPORTANT: Store this bot token securely:', installation.accessToken);
+    // Save installation to database
+    try {
+      await saveInstallation(installation);
+      console.log('✅ Installation saved to database');
+    } catch (dbError) {
+      console.error('❌ Error saving installation to database:', dbError);
+      // Continue anyway - the installation still worked
+    }
 
     // Success page
     res.send(`
@@ -708,6 +743,7 @@ app.post('/slack/interactions', async (req, res) => {
   
   if (payload.type === 'block_actions') {
     const action = payload.actions[0];
+    const teamId = payload.team?.id;
     
     // GA4 Property Selection
     if (action.action_id === 'select_property') {
@@ -715,7 +751,7 @@ app.post('/slack/interactions', async (req, res) => {
       const selectedPropertyName = action.selected_option.text.text;
       const userId = payload.user.id;
       
-      console.log(`User ${userId} selected property: ${selectedPropertyId}`);
+      console.log(`User ${userId} from team ${teamId} selected property: ${selectedPropertyId}`);
       
       try {
         await axios.patch(
@@ -744,7 +780,7 @@ app.post('/slack/interactions', async (req, res) => {
               text: '🚀 *You\'re all set!* Try asking Arnold:\n• "@Arnold show me sessions last month"\n• "@Arnold top 10 pages by views"\n• "@Arnold users by country this week"'
             }
           }
-        ]);
+        ], teamId);
         
       } catch (error) {
         console.error('Error setting property:', error);
@@ -756,7 +792,7 @@ app.post('/slack/interactions', async (req, res) => {
               text: '❌ *Error setting property*\n\nPlease try again or use `/arnold-property YOUR_ID` manually.'
             }
           }
-        ]);
+        ], teamId);
       }
     }
     
@@ -766,7 +802,7 @@ app.post('/slack/interactions', async (req, res) => {
       const selectedDatasetName = action.selected_option.text.text;
       const userId = payload.user.id;
       
-      console.log(`User ${userId} selected BigQuery dataset: ${selectedDataset}`);
+      console.log(`User ${userId} from team ${teamId} selected BigQuery dataset: ${selectedDataset}`);
       
       try {
         await axios.patch(
@@ -795,7 +831,7 @@ app.post('/slack/interactions', async (req, res) => {
               text: `🚀 *Ready for SQL queries!*\n\nYou can now ask Arnold to query this dataset:\n• "@Arnold #bigquery show me top events"\n• "@Arnold #bigquery count users by country"\n\nArnold will automatically use:\n\`${selectedDataset}.events_*\``
             }
           }
-        ]);
+        ], teamId);
         
       } catch (error) {
         console.error('Error setting dataset:', error);
@@ -807,7 +843,7 @@ app.post('/slack/interactions', async (req, res) => {
               text: '❌ *Error setting dataset*\n\nPlease try again or use `/arnold-bigquery-dataset YOUR_DATASET` manually.'
             }
           }
-        ]);
+        ], teamId);
       }
     }
   }
