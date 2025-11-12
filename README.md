@@ -1,4 +1,4 @@
-# Arnold Slack Backend 
+# Arnold Slack Backend  
 
 Handles Slack interactions and Google OAuth for Arnold The Analyst.
 
