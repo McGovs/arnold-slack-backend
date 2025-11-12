@@ -554,6 +554,148 @@ app.get('/oauth/google/callback', async (req, res) => {
 });
 
 // ==========================================
+// SLACK OAUTH CALLBACK (App Installation)
+// ==========================================
+
+app.get('/slack/oauth/callback', async (req, res) => {
+  const { code, error } = req.query;
+
+  if (error) {
+    console.error('Slack OAuth error:', error);
+    return res.send(`
+      <html>
+        <body style="font-family: Arial; text-align: center; padding: 50px;">
+          <h1>❌ Installation Failed</h1>
+          <p>There was an error installing Arnold The Analyst.</p>
+          <p>Error: ${error}</p>
+        </body>
+      </html>
+    `);
+  }
+
+  try {
+    console.log('Processing Slack OAuth callback...');
+    
+    // Exchange the code for an access token
+    const response = await axios.post(
+      'https://slack.com/api/oauth.v2.access',
+      null,
+      {
+        params: {
+          client_id: process.env.SLACK_CLIENT_ID,
+          client_secret: process.env.SLACK_CLIENT_SECRET,
+          code: code,
+          redirect_uri: `${process.env.BASE_URL}/slack/oauth/callback`
+        }
+      }
+    );
+
+    const data = response.data;
+
+    if (!data.ok) {
+      console.error('Slack OAuth API error:', data.error);
+      return res.send(`
+        <html>
+          <body style="font-family: Arial; text-align: center; padding: 50px;">
+            <h1>❌ Installation Failed</h1>
+            <p>Could not complete installation.</p>
+            <p>Error: ${data.error}</p>
+          </body>
+        </html>
+      `);
+    }
+
+    // Store the installation data
+    const installation = {
+      teamId: data.team.id,
+      teamName: data.team.name,
+      botUserId: data.bot_user_id,
+      accessToken: data.access_token,
+      scope: data.scope,
+      installedBy: data.authed_user.id,
+      installedAt: new Date().toISOString()
+    };
+
+    console.log('App installed successfully:', {
+      team: installation.teamName,
+      teamId: installation.teamId,
+      installedBy: installation.installedBy
+    });
+
+    // TODO: Save installation to your database
+    // For now, we'll just log it - you'll need to implement database storage
+    // Example: await saveInstallationToDatabase(installation);
+    
+    console.log('IMPORTANT: Store this bot token securely:', installation.accessToken);
+
+    // Success page
+    res.send(`
+      <html>
+        <head>
+          <style>
+            body {
+              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+              text-align: center;
+              padding: 50px;
+              background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+              color: white;
+            }
+            .container {
+              background: white;
+              color: #333;
+              padding: 40px;
+              border-radius: 10px;
+              max-width: 500px;
+              margin: 0 auto;
+              box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            }
+            h1 { color: #4CAF50; margin-bottom: 10px; }
+            p { line-height: 1.6; }
+            .button {
+              display: inline-block;
+              margin-top: 20px;
+              padding: 12px 24px;
+              background: #4CAF50;
+              color: white;
+              text-decoration: none;
+              border-radius: 5px;
+              font-weight: bold;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <h1>🎉 Arnold The Analyst Installed!</h1>
+            <p><strong>${installation.teamName}</strong> workspace is now connected to Arnold.</p>
+            <p style="margin-top: 30px;">
+              <strong>Get Started:</strong><br>
+              1. Go to Slack<br>
+              2. Type <code>/arnold-connect</code> to link your Google Analytics<br>
+              3. Start asking Arnold questions!
+            </p>
+            <p style="margin-top: 30px; color: #666; font-size: 14px;">
+              You can close this window and return to Slack.
+            </p>
+          </div>
+        </body>
+      </html>
+    `);
+
+  } catch (error) {
+    console.error('Slack OAuth callback error:', error);
+    res.send(`
+      <html>
+        <body style="font-family: Arial; text-align: center; padding: 50px;">
+          <h1>❌ Installation Error</h1>
+          <p>An unexpected error occurred during installation.</p>
+          <p style="color: #666; font-size: 12px;">Error: ${error.message}</p>
+        </body>
+      </html>
+    `);
+  }
+});
+
+// ==========================================
 // INTERACTIVE COMPONENTS (Property & Dataset Selection)
 // ==========================================
 
@@ -753,5 +895,6 @@ app.post('/slack/events', async (req, res) => {
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Arnold Slack Backend running on port ${PORT}`);
   console.log(`📊 Health check: http://localhost:${PORT}/health`);
-  console.log(`🔗 OAuth callback: ${process.env.GOOGLE_REDIRECT_URI}`);
+  console.log(`🔗 Google OAuth callback: ${process.env.GOOGLE_REDIRECT_URI}`);
+  console.log(`🔗 Slack OAuth callback: ${process.env.BASE_URL}/slack/oauth/callback`);
 });
