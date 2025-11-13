@@ -589,7 +589,7 @@ app.get('/oauth/google/callback', async (req, res) => {
 // SLACK OAUTH CALLBACK (App Installation)
 // ==========================================
 
-app.get('/slack/oauth/callback', async (req, res) => {
+app.get('/oauth/callback', async (req, res) => {
   const { code, error } = req.query;
 
   if (error) {
