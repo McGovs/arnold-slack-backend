@@ -855,7 +855,7 @@ app.post('/slack/interactions', async (req, res) => {
 
 // Handle @Arnold mentions and regular messages
 app.post('/slack/events', async (req, res) => {
-  const { type, challenge, event } = req.body;
+  const { type, challenge, event, team_id } = req.body;
   
   // Respond to Slack's challenge for verification
   if (type === 'url_verification') {
@@ -875,9 +875,22 @@ app.post('/slack/events', async (req, res) => {
     // Clean the message - remove user mentions
     const cleanText = text.replace(/<@[A-Z0-9]+>/g, '').trim();
     
-    console.log(`User ${userId} mentioned Arnold: ${text}`);
+    console.log(`User ${userId} from team ${team_id} mentioned Arnold: ${text}`);
     
-    // Trigger n8n workflow
+    // Get the bot token for this specific workspace
+    let botToken;
+    try {
+      botToken = await getBotToken(team_id);
+      if (!botToken) {
+        console.error(`No bot token found for team ${team_id}`);
+        return;
+      }
+    } catch (error) {
+      console.error('Error fetching bot token:', error);
+      return;
+    }
+    
+    // Trigger n8n workflow with all necessary data
     try {
       await axios.post(process.env.N8N_WEBHOOK_URL, {
         user_id: userId,
@@ -885,6 +898,8 @@ app.post('/slack/events', async (req, res) => {
         original_message: text,
         channel: channel,
         ts: ts,
+        team_id: team_id,
+        bot_token: botToken, // Pass the token directly
         event_type: 'app_mention'
       });
     } catch (error) {
@@ -909,7 +924,20 @@ app.post('/slack/events', async (req, res) => {
       // Clean the message - remove user mentions
       const cleanText = text.replace(/<@[A-Z0-9]+>/g, '').trim();
       
-      console.log(`User ${userId} messaged: ${text}`);
+      console.log(`User ${userId} from team ${team_id} messaged: ${text}`);
+      
+      // Get the bot token for this specific workspace
+      let botToken;
+      try {
+        botToken = await getBotToken(team_id);
+        if (!botToken) {
+          console.error(`No bot token found for team ${team_id}`);
+          return;
+        }
+      } catch (error) {
+        console.error('Error fetching bot token:', error);
+        return;
+      }
       
       try {
         await axios.post(process.env.N8N_WEBHOOK_URL, {
@@ -918,6 +946,8 @@ app.post('/slack/events', async (req, res) => {
           original_message: text,
           channel: channel,
           ts: ts,
+          team_id: team_id,
+          bot_token: botToken, // Pass the token directly
           event_type: 'message'
         });
       } catch (error) {
