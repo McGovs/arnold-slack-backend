@@ -766,7 +766,7 @@ app.get('/oauth/callback', async (req, res) => {
       const channelResponse = await axios.post(
         'https://slack.com/api/conversations.create',
         {
-          name: 'purplemonkeydishwasher',  // Hardcoded channel name
+          name: 'arnold-insights',  // Hardcoded channel name
           is_private: false  // Public channel - team members can join
         },
         {
