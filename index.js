@@ -197,45 +197,138 @@ app.post('/slack/commands/disconnect', async (req, res) => {
   }
 });
 
-// /arnold-property command (manual fallback)
+// /arnold-property command (with dropdown support)
 app.post('/slack/commands/property', async (req, res) => {
-  const { user_id, text } = req.body;
+  const { user_id, text, team_id } = req.body;
   const propertyId = text.trim();
   
-  if (!propertyId) {
-    return res.json({
-      response_type: 'ephemeral',
-      text: 'Usage: `/arnold-property properties/123456789` or `/arnold-property 123456789`'
-    });
+  // If user provided a property ID, set it directly (manual mode)
+  if (propertyId) {
+    const formattedPropertyId = propertyId.startsWith('properties/') 
+      ? propertyId 
+      : `properties/${propertyId}`;
+    
+    try {
+      await axios.patch(
+        `${process.env.MCP_SERVER_URL}/users/${user_id}/property`,
+        { propertyId: formattedPropertyId },
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            'X-API-Key': process.env.MCP_API_KEY
+          }
+        }
+      );
+      
+      return res.json({
+        response_type: 'ephemeral',
+        text: `✅ Property set to: \`${formattedPropertyId}\`\n\nYou're all set! Ask Arnold a question like:\n"@Arnold show me sessions by country last week"`
+      });
+      
+    } catch (error) {
+      return res.json({
+        response_type: 'ephemeral',
+        text: `❌ Error: ${error.message}`
+      });
+    }
   }
   
-  // Format property ID
-  const formattedPropertyId = propertyId.startsWith('properties/') 
-    ? propertyId 
-    : `properties/${propertyId}`;
+  // No property ID provided - fetch properties and show dropdown
+  console.log(`User ${user_id} from team ${team_id} requested property dropdown`);
   
+  // Acknowledge immediately
+  res.json({
+    response_type: 'ephemeral',
+    text: '🔍 Fetching your GA4 properties...'
+  });
+  
+  // Fetch properties and send dropdown asynchronously
   try {
-    await axios.patch(
-      `${process.env.MCP_SERVER_URL}/users/${user_id}/property`,
-      { propertyId: formattedPropertyId },
+    const propertiesResponse = await axios.get(
+      `${process.env.MCP_SERVER_URL}/users/${user_id}/properties`,
       {
         headers: {
-          'Content-Type': 'application/json',
           'X-API-Key': process.env.MCP_API_KEY
         }
       }
     );
     
-    res.json({
-      response_type: 'ephemeral',
-      text: `✅ Property set to: \`${formattedPropertyId}\`\n\nYou're all set! Ask Arnold a question like:\n"@Arnold show me sessions by country last week"`
-    });
-    
+    if (propertiesResponse.data.success && propertiesResponse.data.properties.length > 0) {
+      const properties = propertiesResponse.data.properties;
+      
+      console.log(`Found ${properties.length} properties for user ${user_id}`);
+      
+      // Build dropdown options
+      const options = properties.map(prop => ({
+        text: {
+          type: 'plain_text',
+          text: `${prop.name} (${prop.account})`,
+          emoji: true
+        },
+        value: prop.id
+      }));
+      
+      // Send interactive message with team-specific token
+      await sendSlackMessage(user_id, [
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: '🎯 *Select Your GA4 Property*\n\nChoose which property you\'d like Arnold to analyze:'
+          }
+        },
+        {
+          type: 'actions',
+          block_id: 'property_selection',
+          elements: [
+            {
+              type: 'static_select',
+              action_id: 'select_property',
+              placeholder: {
+                type: 'plain_text',
+                text: 'Select a property...',
+                emoji: true
+              },
+              options: options.slice(0, 100) // Slack limit
+            }
+          ]
+        },
+        {
+          type: 'context',
+          elements: [
+            {
+              type: 'mrkdwn',
+              text: `Found ${properties.length} ${properties.length === 1 ? 'property' : 'properties'} • You can also set manually with \`/arnold-property properties/123456789\``
+            }
+          ]
+        }
+      ], team_id);
+      
+    } else {
+      // No properties found
+      console.log('No properties found for user');
+      await sendSlackMessage(user_id, [
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: '⚠️ *No GA4 Properties Found*\n\nMake sure you\'ve connected your Google Analytics account first.\n\nUse `/arnold-connect` to link your account, or set your property manually:\n`/arnold-property properties/123456789`'
+          }
+        }
+      ], team_id);
+    }
   } catch (error) {
-    res.json({
-      response_type: 'ephemeral',
-      text: `❌ Error: ${error.message}`
-    });
+    console.error('Error fetching properties for dropdown:', error.response?.data || error.message);
+    
+    await sendSlackMessage(user_id, [
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: '❌ *Error Fetching Properties*\n\nCouldn\'t retrieve your GA4 properties. Please try again or set manually:\n`/arnold-property properties/123456789`\n\nIf you haven\'t connected yet, use `/arnold-connect` first.'
+        }
+      }
+    ], team_id);
   }
 });
 
