@@ -824,12 +824,12 @@ app.get('/oauth/callback', async (req, res) => {
     let channelCreated = false;
     
     try {
-      console.log(`Creating #arnold channel for team ${installation.teamName}...`);
+      console.log(`Creating #arnold-the-analyst channel for team ${installation.teamName}...`);
       
       const channelResponse = await axios.post(
         'https://slack.com/api/conversations.create',
         {
-          name: 'arnold',  // Hardcoded channel name
+          name: 'arnold-the-analyst',  // Hardcoded channel name
           is_private: false  // Public channel - team members can join
         },
         {
@@ -843,7 +843,7 @@ app.get('/oauth/callback', async (req, res) => {
       if (channelResponse.data.ok) {
         channelId = channelResponse.data.channel.id;
         channelCreated = true;
-        console.log(`✅ Created #arnold channel (${channelId})`);
+        console.log(`✅ Created #arnold-the-analyst channel (${channelId})`);
         
         // Generate OAuth URL for the welcome message button
         const authUrl = oauth2Client.generateAuthUrl({
