@@ -840,62 +840,37 @@ app.get('/oauth/callback', async (req, res) => {
         }
       );
       
-      if (channelResponse.data.ok) {
-        channelId = channelResponse.data.channel.id;
-        channelCreated = true;
-        console.log(`✅ Created #arnold-the-analyst channel (${channelId})`);
-        
-        // Send welcome message to the new channel
-        await axios.post(
-          'https://slack.com/api/chat.postMessage',
-          {
-            channel: channelId,
-            blocks: [
-  {
-    type: 'section',
-    text: {
-      type: 'mrkdwn',
-      text: '🎉 *Welcome to Arnold The Analyst!*\n\nThis is your team\'s dedicated channel for analytics questions and insights.'
-    }
-  },
-  {
-    type: 'divider'
-  },
-  {
-    type: 'section',
-    text: {
-      type: 'mrkdwn',
-      text: '*Quick Start Guide:*\n\n1️⃣ *Connect Google Analytics*\nType `/arnold-connect` to link your GA4 account\n\n2️⃣ *Select Your Property*\nChoose your GA4 property with `/arnold-property`\n\n3️⃣ *Ask Arnold Anything!*\nMention me with questions like:\n• `@Arnold show me sessions last week`\n• `@Arnold top 10 pages by views`\n• `@Arnold users by country this month`'
-    }
-  },
-              {
-                type: 'section',
-                text: {
-                  type: 'mrkdwn',
-                  text: '2️⃣ *Select Your Property*\nChoose your GA4 property with `/arnold-property`\n\n3️⃣ *Ask Arnold Anything!*\nMention me with questions like:\n• `@Arnold How many page views were there last month?`
-                }
-              },
-              {
-                type: 'divider'
-              },
-              {
-                type: 'context',
-                elements: [
-                  {
-                    type: 'mrkdwn',
-                    text: '💡 *Tip:* Invite your teammates to this channel so everyone can benefit from Arnold\'s insights!'
-                  }
-                ]
-              }
-            ]
-          },
-          {
-            headers: {
-              'Authorization': `Bearer ${data.access_token}`,
-              'Content-Type': 'application/json'
-            }
+blocks: [
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: '🎉 *Welcome to Arnold The Analyst!*\n\nThis is your team\'s dedicated channel for analytics questions and insights.'
           }
-        );
+        },
+        {
+          type: 'divider'
+        },
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: '*Quick Start Guide:*\n\n1️⃣ *Connect Google Analytics*\nType `/arnold-connect` to link your GA4 account\n\n2️⃣ *Select Your Property*\nChoose your GA4 property with `/arnold-property`\n\n3️⃣ *Ask Arnold Anything!*\nMention me with questions like:\n• `@Arnold show me sessions last week`\n• `@Arnold top 10 pages by views`\n• `@Arnold users by country this month`'
+          }
+        },
+        {
+          type: 'divider'
+        },
+        {
+          type: 'context',
+          elements: [
+            {
+              type: 'mrkdwn',
+              text: '💡 *Tip:* Invite your teammates to this channel so everyone can benefit from Arnold\'s insights!'
+            }
+          ]
+        }
+      ];
         
         console.log('✅ Welcome message sent to #arnold');
         
