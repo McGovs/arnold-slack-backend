@@ -845,63 +845,29 @@ app.get('/oauth/callback', async (req, res) => {
         channelCreated = true;
         console.log(`✅ Created #arnold-the-analyst channel (${channelId})`);
         
-        // Generate OAuth URL for the welcome message button
-        const authUrl = oauth2Client.generateAuthUrl({
-          access_type: 'offline',
-          scope: [
-            'https://www.googleapis.com/auth/analytics.readonly',
-            'https://www.googleapis.com/auth/analytics.manage.users.readonly',
-            'https://www.googleapis.com/auth/userinfo.email'
-          ],
-          prompt: 'consent',
-          state: `welcome:${installation.teamId}` // Special state for welcome message
-        });
-        
         // Send welcome message to the new channel
         await axios.post(
           'https://slack.com/api/chat.postMessage',
           {
             channel: channelId,
             blocks: [
-              {
-                type: 'section',
-                text: {
-                  type: 'mrkdwn',
-                  text: '🎉 *Welcome to Arnold The Analyst!*\n\nThis is your team\'s dedicated channel for analytics questions and insights.'
-                }
-              },
-              {
-                type: 'divider'
-              },
-              {
-                type: 'section',
-                text: {
-                  type: 'mrkdwn',
-                  text: '*Quick Start Guide:*'
-                }
-              },
-              {
-                type: 'section',
-                text: {
-                  type: 'mrkdwn',
-                  text: '1️⃣ *Connect Google Analytics*\nClick the button below or type `/arnold-connect` to link your GA4 account'
-                }
-              },
-              {
-                type: 'actions',
-                elements: [
-                  {
-                    type: 'button',
-                    text: {
-                      type: 'plain_text',
-                      text: '🔗 Connect Google Analytics',
-                      emoji: true
-                    },
-                    url: authUrl,
-                    style: 'primary'
-                  }
-                ]
-              },
+  {
+    type: 'section',
+    text: {
+      type: 'mrkdwn',
+      text: '🎉 *Welcome to Arnold The Analyst!*\n\nThis is your team\'s dedicated channel for analytics questions and insights.'
+    }
+  },
+  {
+    type: 'divider'
+  },
+  {
+    type: 'section',
+    text: {
+      type: 'mrkdwn',
+      text: '*Quick Start Guide:*\n\n1️⃣ *Connect Google Analytics*\nType `/arnold-connect` to link your GA4 account\n\n2️⃣ *Select Your Property*\nChoose your GA4 property with `/arnold-property`\n\n3️⃣ *Ask Arnold Anything!*\nMention me with questions like:\n• `@Arnold show me sessions last week`\n• `@Arnold top 10 pages by views`\n• `@Arnold users by country this month`'
+    }
+  },
               {
                 type: 'section',
                 text: {
