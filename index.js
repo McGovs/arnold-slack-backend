@@ -761,12 +761,12 @@ app.get('/oauth/callback', async (req, res) => {
     let channelCreated = false;
     
     try {
-      console.log(`Creating #arnold-the-analyst channel for team ${installation.teamName}...`);
+      console.log(`Creating #arnold channel for team ${installation.teamName}...`);
       
       const channelResponse = await axios.post(
         'https://slack.com/api/conversations.create',
         {
-          name: 'arnold-the-analyst',
+          name: 'arnold',
           is_private: false
         },
         {
@@ -780,7 +780,7 @@ app.get('/oauth/callback', async (req, res) => {
       if (channelResponse.data.ok) {
         channelId = channelResponse.data.channel.id;
         channelCreated = true;
-        console.log(`✅ Created #arnold-the-analyst channel (${channelId})`);
+        console.log(`✅ Created #arnold channel (${channelId})`);
         
         // Send welcome message to the new channel
         await axios.post(
@@ -802,7 +802,7 @@ app.get('/oauth/callback', async (req, res) => {
                 type: 'section',
                 text: {
                   type: 'mrkdwn',
-                  text: '*Quick Start Guide:*\n\n1️⃣ *Connect Google Analytics*\nType `/arnold-connect` to link your GA4 account\n\n2️⃣ *Select Your Property*\nChoose your GA4 property with `/arnold-property`\n\n3️⃣ *Ask Arnold Anything!*\nMention me with questions like:\n• `@Arnold How many page views were there last month?`
+                  text: '*Quick Start Guide:*\n\n1️⃣ *Connect Google Analytics*\nType `/arnold-connect` to link your GA4 account\n\n2️⃣ *Select Your Property*\nChoose your GA4 property with `/arnold-property`\n\n3️⃣ *Ask Arnold Anything!*\nMention me with questions like:\n• `@Arnold show me sessions last week`\n• `@Arnold top 10 pages by views`\n• `@Arnold users by country this month`'
                 }
               },
               {
@@ -827,7 +827,7 @@ app.get('/oauth/callback', async (req, res) => {
           }
         );
         
-        console.log('✅ Welcome message sent to #arnold-the-analyst');
+        console.log('✅ Welcome message sent to #arnold');
         
         // Invite the installer to the channel
         try {
@@ -844,16 +844,16 @@ app.get('/oauth/callback', async (req, res) => {
               }
             }
           );
-          console.log('✅ Installer added to #arnold-the-analyst channel');
+          console.log('✅ Installer added to #arnold channel');
         } catch (inviteError) {
           console.log('Note: Could not invite installer (may already be in channel)');
         }
         
       } else {
-        console.error('Failed to create #arnold-the-analyst channel:', channelResponse.data.error);
+        console.error('Failed to create #arnold channel:', channelResponse.data.error);
         
         if (channelResponse.data.error === 'name_taken') {
-          console.log('ℹ️ #arnold-the-analyst channel already exists in this workspace');
+          console.log('ℹ️ #arnold channel already exists in this workspace');
           channelCreated = 'already_exists';
         }
       }
@@ -903,12 +903,12 @@ app.get('/oauth/callback', async (req, res) => {
             ${channelCreated === true ? `
               <div style="margin: 30px 0;">
                 <p style="font-size: 18px; margin-bottom: 10px;">Your dedicated analytics channel:</p>
-                <div class="channel-badge">#arnold-the-analyst</div>
+                <div class="channel-badge">#arnold</div>
               </div>
               <p style="color: #666; font-size: 14px;">Head to this channel to start asking questions!</p>
             ` : channelCreated === 'already_exists' ? `
               <div style="margin: 30px 0;">
-                <p style="color: #666;">The <strong>#arnold-the-analyst</strong> channel already exists in your workspace.</p>
+                <p style="color: #666;">The <strong>#arnold</strong> channel already exists in your workspace.</p>
               </div>
             ` : `
               <div style="margin: 30px 0;">
@@ -918,7 +918,7 @@ app.get('/oauth/callback', async (req, res) => {
             
             <p style="margin-top: 30px;">
               <strong>Get Started:</strong><br>
-              1. Go to <strong>#arnold-the-analyst</strong> in Slack${!channelCreated ? ' (or any channel)' : ''}<br>
+              1. Go to <strong>#arnold</strong> in Slack${!channelCreated ? ' (or any channel)' : ''}<br>
               2. Type <code>/arnold-connect</code> to link your Google Analytics<br>
               3. Start asking Arnold questions!
             </p>
