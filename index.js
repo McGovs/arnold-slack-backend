@@ -906,7 +906,7 @@ app.get('/oauth/callback', async (req, res) => {
                 type: 'section',
                 text: {
                   type: 'mrkdwn',
-                  text: '2️⃣ *Select Your Property*\nChoose your GA4 property with `/arnold-property`\n\n3️⃣ *Ask Arnold Anything!*\nMention me with questions like:\n• `@Arnold show me sessions last week`\n• `@Arnold top 10 pages by views`\n• `@Arnold users by country this month`'
+                  text: '2️⃣ *Select Your Property*\nChoose your GA4 property with `/arnold-property`\n\n3️⃣ *Ask Arnold Anything!*\nMention me with questions like:\n• `@Arnold How many page views were there last month?`
                 }
               },
               {
