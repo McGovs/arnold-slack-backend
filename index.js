@@ -474,7 +474,20 @@ app.get('/oauth/google/callback', async (req, res) => {
   const { code, state, error } = req.query;
   
   // Extract user ID and team ID from state
-  const [slackUserId, teamId] = state ? state.split(':') : [null, null];
+  let slackUserId, teamId;
+  if (state) {
+    const parts = state.split(':');
+    if (parts[0] === 'welcome') {
+      // Welcome message button - user clicked from team channel
+      // We'll need to get the actual user from the authorization
+      teamId = parts[1];
+      slackUserId = null; // Will be determined from the OAuth flow
+    } else {
+      // Regular /arnold-connect command
+      slackUserId = parts[0];
+      teamId = parts[1];
+    }
+  }
   
   if (error) {
     console.error('OAuth error:', error);
@@ -490,24 +503,74 @@ app.get('/oauth/google/callback', async (req, res) => {
     `);
   }
   
-  if (!slackUserId || !teamId) {
+  if (!teamId) {
     return res.send(`
       <html>
         <body style="font-family: Arial; text-align: center; padding: 50px;">
           <h1>❌ Invalid Request</h1>
-          <p>Missing user or team information.</p>
+          <p>Missing team information.</p>
         </body>
       </html>
     `);
   }
   
   try {
-    console.log(`Processing OAuth callback for user ${slackUserId} in team ${teamId}`);
+    console.log(`Processing OAuth callback for user ${slackUserId || 'welcome'} in team ${teamId}`);
     
     // Exchange authorization code for tokens
     const { tokens } = await oauth2Client.getToken(code);
     
     console.log('Tokens received from Google');
+    
+    // If this was from the welcome message, we need to direct user to use /arnold-connect
+    if (!slackUserId) {
+      console.log('OAuth initiated from welcome message - user needs to use /arnold-connect');
+      return res.send(`
+        <html>
+          <head>
+            <style>
+              body {
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+                text-align: center;
+                padding: 50px;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white;
+              }
+              .container {
+                background: white;
+                color: #333;
+                padding: 40px;
+                border-radius: 10px;
+                max-width: 500px;
+                margin: 0 auto;
+                box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+              }
+              h1 { color: #FF9800; margin-bottom: 10px; }
+              p { line-height: 1.6; }
+              code {
+                background: #f5f5f5;
+                padding: 15px;
+                border-radius: 5px;
+                font-family: monospace;
+                display: block;
+                margin: 20px 0;
+              }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <h1>⚠️ Almost There!</h1>
+              <p>To complete your personal connection to Google Analytics, please go back to Slack and type:</p>
+              <code>/arnold-connect</code>
+              <p>This ensures Arnold links to <strong>your</strong> Google Analytics account.</p>
+              <p style="margin-top: 30px; color: #666; font-size: 14px;">
+                You can close this window now.
+              </p>
+            </div>
+          </body>
+        </html>
+      `);
+    }
     
     // Store tokens in MCP server database
     const storeResponse = await axios.post(
@@ -766,7 +829,7 @@ app.get('/oauth/callback', async (req, res) => {
       const channelResponse = await axios.post(
         'https://slack.com/api/conversations.create',
         {
-          name: 'arnold-insights',  // Hardcoded channel name
+          name: 'arnold',  // Hardcoded channel name
           is_private: false  // Public channel - team members can join
         },
         {
@@ -781,6 +844,18 @@ app.get('/oauth/callback', async (req, res) => {
         channelId = channelResponse.data.channel.id;
         channelCreated = true;
         console.log(`✅ Created #arnold channel (${channelId})`);
+        
+        // Generate OAuth URL for the welcome message button
+        const authUrl = oauth2Client.generateAuthUrl({
+          access_type: 'offline',
+          scope: [
+            'https://www.googleapis.com/auth/analytics.readonly',
+            'https://www.googleapis.com/auth/analytics.manage.users.readonly',
+            'https://www.googleapis.com/auth/userinfo.email'
+          ],
+          prompt: 'consent',
+          state: `welcome:${installation.teamId}` // Special state for welcome message
+        });
         
         // Send welcome message to the new channel
         await axios.post(
@@ -802,7 +877,36 @@ app.get('/oauth/callback', async (req, res) => {
                 type: 'section',
                 text: {
                   type: 'mrkdwn',
-                  text: '*Quick Start Guide:*\n\n1️⃣ *Connect Google Analytics*\nType `/arnold-connect` to link your GA4 account\n\n2️⃣ *Select Your Property*\nChoose your GA4 property with `/arnold-property`\n\n3️⃣ *Ask Arnold Anything!*\nMention me with questions like:\n• `@Arnold show me sessions last week`\n• `@Arnold top 10 pages by views`\n• `@Arnold users by country this month`'
+                  text: '*Quick Start Guide:*'
+                }
+              },
+              {
+                type: 'section',
+                text: {
+                  type: 'mrkdwn',
+                  text: '1️⃣ *Connect Google Analytics*\nClick the button below or type `/arnold-connect` to link your GA4 account'
+                }
+              },
+              {
+                type: 'actions',
+                elements: [
+                  {
+                    type: 'button',
+                    text: {
+                      type: 'plain_text',
+                      text: '🔗 Connect Google Analytics',
+                      emoji: true
+                    },
+                    url: authUrl,
+                    style: 'primary'
+                  }
+                ]
+              },
+              {
+                type: 'section',
+                text: {
+                  type: 'mrkdwn',
+                  text: '2️⃣ *Select Your Property*\nChoose your GA4 property with `/arnold-property`\n\n3️⃣ *Ask Arnold Anything!*\nMention me with questions like:\n• `@Arnold show me sessions last week`\n• `@Arnold top 10 pages by views`\n• `@Arnold users by country this month`'
                 }
               },
               {
@@ -830,8 +934,6 @@ app.get('/oauth/callback', async (req, res) => {
         console.log('✅ Welcome message sent to #arnold');
         
         // Invite the installer to the channel (they're automatically added, but this ensures it)
-        // Note: The bot and installer are already members, so this might not be necessary
-        // but it's good practice to explicitly invite
         try {
           await axios.post(
             'https://slack.com/api/conversations.invite',
@@ -934,7 +1036,7 @@ app.get('/oauth/callback', async (req, res) => {
             <p style="margin-top: 30px;">
               <strong>Get Started:</strong><br>
               1. Go to <strong>#arnold</strong> in Slack${!channelCreated ? ' (or any channel)' : ''}<br>
-              2. Type <code>/arnold-connect</code> to link your Google Analytics<br>
+              2. Click the button or type <code>/arnold-connect</code> to link your Google Analytics<br>
               3. Start asking Arnold questions!
             </p>
             
