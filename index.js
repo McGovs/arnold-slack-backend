@@ -105,15 +105,16 @@ Execute the \`/arnold-connect\` command. You will then be able to sign in via Go
 Execute the \`/arnold-property\` command. You will then be able to select any GA4 property you have access to here.
 
 *Step 3 — Ask a question*
-Mention Arnold, using @Arnold, in any DM or channel to ask a question. For example:
-\`@Arnold how many visits did we have last week?\`
+Mention Arnold, using @Arnold, in any DM thread or channel to ask a question. For example:
+"@Arnold how many visits did we have last week?"
 
 *Step 4 — Create a dedicated channel and invite your colleagues!*
-Arnold works best when your team explores insights together. Create a channel called #arnold-the-analyst, invite @Arnold and your teammates, and start getting fast, shared answers from your GA4 data.
+Arnold works best when your team explores insights together.
+Create a channel called #arnold-the-analyst, invite @Arnold and your teammates, and start getting fast, shared answers from your GA4 data.
 
 ⛔ Arnold can’t answer questions until GA4 is connected.
 
-Enjoy talking to your GA4 data :)`
+Enjoy talking to your GA4 data 🤗`
             }
           }
         ]
