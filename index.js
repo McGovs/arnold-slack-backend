@@ -105,7 +105,7 @@ Execute the \`/arnold-connect\` command to sign in with Google and connect your 
 Execute the \`/arnold-property\` command. You will then be able to select any GA4 property you have access to here from a dropdown.
 
 *Step 3: Ask a question using @Arnold*
-Mention Arnold, using @Arnold, in any DM thread or channel to ask a question. For example:
+Mention Arnold, using @Arnold, in this DM thread or any channel to ask a question. For example:
 @Arnold how many visits did we have last week?
 
 *Step 4: Create a dedicated channel and invite your colleagues!*
