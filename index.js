@@ -862,16 +862,9 @@ res.send(`
 
         <div style="margin: 30px 0;">
           <p style="font-size: 16px;">
-            We’ve sent you a <strong>direct message in Slack</strong> with next steps.
+            We’ve sent you a <strong>direct message in Slack</strong> with exact next steps (bottom left :).
           </p>
         </div>
-
-        <p style="margin-top: 30px;">
-          <strong>Get Started:</strong><br>
-          1. Open your DMs in Slack<br>
-          2. Look for <strong>Arnold The Analyst</strong><br>
-          3. Run <code>/arnold-connect</code> to link Google Analytics
-        </p>
 
         <p style="margin-top: 30px; color: #666; font-size: 14px;">
           You can close this window and return to Slack.
