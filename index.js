@@ -62,6 +62,74 @@ async function sendSlackMessage(channel, blocks, teamId = null) {
   }
 }
 
+
+// Send onboarding DM to installing user
+async function sendOnboardingDM(botToken, userId) {
+  try {
+    const dmRes = await axios.post(
+      'https://slack.com/api/conversations.open',
+      { users: userId },
+      {
+        headers: {
+          Authorization: `Bearer ${botToken}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+
+    if (!dmRes.data.ok) {
+      console.error('Failed to open DM:', dmRes.data.error);
+      return;
+    }
+
+    const channelId = dmRes.data.channel.id;
+
+    await axios.post(
+      'https://slack.com/api/chat.postMessage',
+      {
+        channel: channelId,
+        blocks: [
+          {
+            type: 'section',
+            text: {
+              type: 'mrkdwn',
+              text:
+`👋 *Welcome to Arnold The Analyst*
+
+Arnold lets you ask questions about your *Google Analytics (GA4)* data directly in Slack.
+
+*Step 1 — Connect GA4*
+\`/arnold-connect\`
+
+*Step 2 — Select a GA4 property*
+\`/arnold-property\`
+
+*Step 3 — Ask a question*
+Mention Arnold anywhere:
+\`@Arnold how many users did we get last week by channel?\`
+
+⛔ Arnold can’t answer questions until GA4 is connected.
+
+If you get stuck, just reply here.`
+            }
+          }
+        ]
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${botToken}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+
+    console.log(`✅ Onboarding DM sent to user ${userId}`);
+  } catch (err) {
+    console.error('Error sending onboarding DM:', err.response?.data || err.message);
+  }
+}
+
+
 // Helper function to get team ID from user context
 // This will be passed from Slack webhook payloads
 async function getTeamIdFromRequest(req) {
@@ -756,180 +824,60 @@ app.get('/oauth/callback', async (req, res) => {
       // Continue anyway - the installation still worked
     }
 
-    // CREATE DEDICATED ARNOLD CHANNEL
-    let channelId = null;
-    let channelCreated = false;
-    
-    try {
-      console.log(`Creating #arnold-the-analyst channel for team ${installation.teamName}...`);
-      
-      const channelResponse = await axios.post(
-        'https://slack.com/api/conversations.create',
-        {
-          name: 'arnold',
-          is_private: false
-        },
-        {
-          headers: {
-            'Authorization': `Bearer ${data.access_token}`,
-            'Content-Type': 'application/json'
-          }
-        }
-      );
-      
-      if (channelResponse.data.ok) {
-        channelId = channelResponse.data.channel.id;
-        channelCreated = true;
-        console.log(`✅ Created #arnold-the-analyst channel (${channelId})`);
-        
-        // Send welcome message to the new channel
-        await axios.post(
-          'https://slack.com/api/chat.postMessage',
-          {
-            channel: channelId,
-            blocks: [
-              {
-                type: 'section',
-                text: {
-                  type: 'mrkdwn',
-                  text: '🎉 *Welcome to Arnold The Analyst!*\n\nThis is your team\'s dedicated channel for analytics questions and insights.'
-                }
-              },
-              {
-                type: 'divider'
-              },
-              {
-                type: 'section',
-                text: {
-                  type: 'mrkdwn',
-                  text: '*Quick Start Guide:*\n\n1️⃣ *Connect Google Analytics*\nType `/arnold-connect` to link your GA4 account\n\n2️⃣ *Select Your Property*\nChoose your GA4 property with `/arnold-property`\n\n3️⃣ *Ask Arnold Anything!*\nMention me with questions like:\n• `@Arnold How many page views were there last month?`'
-                }
-              },
-              {
-                type: 'divider'
-              },
-              {
-                type: 'context',
-                elements: [
-                  {
-                    type: 'mrkdwn',
-                    text: '💡 *Tip:* Invite your teammates to this channel so everyone can benefit from Arnold\'s insights!'
-                  }
-                ]
-              }
-            ]
-          },
-          {
-            headers: {
-              'Authorization': `Bearer ${data.access_token}`,
-              'Content-Type': 'application/json'
-            }
-          }
-        );
-        
-        console.log('✅ Welcome message sent to #arnold-the-analyst');
-        
-        // Invite the installer to the channel
-        try {
-          await axios.post(
-            'https://slack.com/api/conversations.invite',
-            {
-              channel: channelId,
-              users: installation.installedBy
-            },
-            {
-              headers: {
-                'Authorization': `Bearer ${data.access_token}`,
-                'Content-Type': 'application/json'
-              }
-            }
-          );
-          console.log('✅ Installer added to #arnold-the-analyst channel');
-        } catch (inviteError) {
-          console.log('Note: Could not invite installer (may already be in channel)');
-        }
-        
-      } else {
-        console.error('Failed to create #arnold-the-analyst channel:', channelResponse.data.error);
-        
-        if (channelResponse.data.error === 'name_taken') {
-          console.log('ℹ️ #arnold-the-analyst channel already exists in this workspace');
-          channelCreated = 'already_exists';
-        }
-      }
-    } catch (error) {
-      console.error('Error creating Arnold channel:', error.response?.data || error.message);
-    }
+    // Send onboarding DM to installing user
+    await sendOnboardingDM(data.access_token, installation.installedBy);
 
-    // Success page
-    res.send(`
-      <html>
-        <head>
-          <style>
-            body {
-              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
-              text-align: center;
-              padding: 50px;
-              background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-              color: white;
-            }
-            .container {
-              background: white;
-              color: #333;
-              padding: 40px;
-              border-radius: 10px;
-              max-width: 500px;
-              margin: 0 auto;
-              box-shadow: 0 10px 40px rgba(0,0,0,0.2);
-            }
-            h1 { color: #4CAF50; margin-bottom: 10px; }
-            p { line-height: 1.6; }
-            .channel-badge {
-              display: inline-block;
-              background: #f0f0f0;
-              padding: 8px 16px;
-              border-radius: 20px;
-              font-weight: bold;
-              color: #333;
-              margin: 10px 0;
-            }
-          </style>
-        </head>
-        <body>
-          <div class="container">
-            <h1>🎉 Arnold The Analyst Installed!</h1>
-            <p><strong>${installation.teamName}</strong> workspace is now connected to Arnold.</p>
-            
-            ${channelCreated === true ? `
-              <div style="margin: 30px 0;">
-                <p style="font-size: 18px; margin-bottom: 10px;">Your dedicated analytics channel:</p>
-                <div class="channel-badge">#arnold-the-analyst</div>
-              </div>
-              <p style="color: #666; font-size: 14px;">Head to this channel to start asking questions!</p>
-            ` : channelCreated === 'already_exists' ? `
-              <div style="margin: 30px 0;">
-                <p style="color: #666;">The <strong>#arnold-the-analyst</strong> channel already exists in your workspace.</p>
-              </div>
-            ` : `
-              <div style="margin: 30px 0;">
-                <p style="color: #666;">You can create an Arnold channel or DM the bot directly.</p>
-              </div>
-            `}
-            
-            <p style="margin-top: 30px;">
-              <strong>Get Started:</strong><br>
-              1. Go to <strong>#arnold-the-analyst</strong> in Slack${!channelCreated ? ' (or any channel)' : ''}<br>
-              2. Type <code>/arnold-connect</code> to link your Google Analytics<br>
-              3. Start asking Arnold questions!
-            </p>
-            
-            <p style="margin-top: 30px; color: #666; font-size: 14px;">
-              You can close this window and return to Slack.
-            </p>
-          </div>
-        </body>
-      </html>
-    `);
+// Success page
+res.send(`
+  <html>
+    <head>
+      <style>
+        body {
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+          text-align: center;
+          padding: 50px;
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          color: white;
+        }
+        .container {
+          background: white;
+          color: #333;
+          padding: 40px;
+          border-radius: 10px;
+          max-width: 500px;
+          margin: 0 auto;
+          box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+        }
+        h1 { color: #4CAF50; margin-bottom: 10px; }
+        p { line-height: 1.6; }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <h1>🎉 Arnold The Analyst Installed!</h1>
+        <p><strong>${installation.teamName}</strong> workspace is now connected to Arnold.</p>
+
+        <div style="margin: 30px 0;">
+          <p style="font-size: 16px;">
+            We’ve sent you a <strong>direct message in Slack</strong> with next steps.
+          </p>
+        </div>
+
+        <p style="margin-top: 30px;">
+          <strong>Get Started:</strong><br>
+          1. Open your DMs in Slack<br>
+          2. Look for <strong>Arnold The Analyst</strong><br>
+          3. Run <code>/arnold-connect</code> to link Google Analytics
+        </p>
+
+        <p style="margin-top: 30px; color: #666; font-size: 14px;">
+          You can close this window and return to Slack.
+        </p>
+      </div>
+    </body>
+  </html>
+`);
+
 
   } catch (error) {
     console.error('Slack OAuth callback error:', error);
