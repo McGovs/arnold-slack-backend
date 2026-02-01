@@ -112,7 +112,7 @@ Mention Arnold, using @Arnold, in any DM thread or channel to ask a question. Fo
 Arnold works best when your team explores insights together.
 Create a channel called #arnold-the-analyst, invite @Arnold and your teammates, and start getting fast, shared answers from your GA4 data.
 
-⛔ Arnold can’t answer questions until GA4 is connected. Remember to execute /arnold-connect.
+⛔ Arnold won't work until GA4 is connected. Remember to execute /arnold-connect.
 
 Enjoy talking to your GA4 data 🤗`
             }
