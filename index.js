@@ -862,7 +862,7 @@ res.send(`
 
         <div style="margin: 30px 0;">
           <p style="font-size: 16px;">
-            We’ve sent you a <strong>direct message in Slack</strong> with exact next steps (bottom left :).
+            We’ve sent you a <strong>direct message in Slack</strong> with exact next steps (bottom left :)
           </p>
         </div>
 
