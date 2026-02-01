@@ -102,7 +102,7 @@ Arnold lets you ask questions about your *Google Analytics (GA4)* data directly 
 Execute the \`/arnold-connect\` command to sign in with Google and connect your GA4 properties.
 
 *Step 2: Select a GA4 property*
-Execute the \`/arnold-property\` command. You will then be able to select any GA4 property you have access to here from a dropdown.
+Execute the \`/arnold-property\` command. You will then be able to select any GA4 property here using a dropdown.
 
 *Step 3: Ask a question using @Arnold*
 You can ask Arnold questions in this DM thread, or in any channel after inviting the app to the channel via \`/invite\` @Arnold. For example:
