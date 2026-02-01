@@ -1066,7 +1066,7 @@ app.post('/slack/events', async (req, res) => {
     const channel = event.channel;
     const ts = event.ts;
     
-    if (text.includes('arnold') || text.includes('Arnold') || event.channel_type === 'im') {
+    if (event.channel_type === 'im' || text.match(/arnold/i)) {
       const cleanText = text.replace(/<@[A-Z0-9]+>/g, '').trim();
       
       console.log(`User ${userId} from team ${team_id} messaged: ${text}`);
