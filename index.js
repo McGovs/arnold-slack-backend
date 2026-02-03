@@ -96,7 +96,7 @@ async function sendOnboardingDM(botToken, userId) {
               text:
 `👋 *Welcome to Arnold The Analyst*
 
-Arnold lets you ask questions about your * Analytics (GA4)* data directly in Slack.
+Arnold lets you ask questions about your *Google Analytics (GA4)* data directly in Slack.
 
 *Step 1: Connect To Your GA4 Data*
 Execute the \`/arnold-connect\` command to sign in using Google OAuth and connect your GA4 properties.
@@ -110,7 +110,7 @@ You can ask Arnold questions in this DM thread, or in any channel after inviting
 
 *Step 4: Create a dedicated channel and invite your colleagues!*
 Arnold works best when your team explores insights together.
-Create a shared channel, (e.g. #arnold-the-analyst), invite Arnold via the \`/invite\` command plus your teammates to start getting fast, shared answers from your GA4 data.
+Create a shared channel, (e.g. #arnold-the-analyst), invite Arnold via the \`/invite\` command along with your teammates to start getting fast, shared answers from your GA4 data.
 
 ⛔ Arnold won't work until you've signed in via Google OAuth. Remember to execute /arnold-connect.
 
