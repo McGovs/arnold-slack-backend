@@ -934,7 +934,7 @@ app.post('/slack/interactions', async (req, res) => {
             type: 'section',
             text: {
               type: 'mrkdwn',
-              text: '🚀 *You\'re all set!* Try asking Arnold:\n• "@Arnold show me sessions last month"\n• "@Arnold top 10 pages by views"\n• "@Arnold users by country this week"'
+              text: '🚀 *You\'re all set!*"'
             }
           }
         ], teamId);
