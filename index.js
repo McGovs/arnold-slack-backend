@@ -171,7 +171,7 @@ app.post('/slack/commands/connect', async (req, res) => {
         type: 'section',
         text: {
           type: 'mrkdwn',
-          text: '👋 *Connect your Google Analytics account to get started with Arnold!*\n\nArnold will be able to:\n• Read your Google Analytics data\n• Show you insights and reports\n• Answer questions about your website traffic'
+          text: '👋 *Connect your Google Analytics account to get started with Arnold!*'
         }
       },
       {
