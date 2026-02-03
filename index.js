@@ -96,10 +96,10 @@ async function sendOnboardingDM(botToken, userId) {
               text:
 `👋 *Welcome to Arnold The Analyst*
 
-Arnold lets you ask questions about your *Google Analytics (GA4)* data directly in Slack.
+Arnold lets you ask questions about your * Analytics (GA4)* data directly in Slack.
 
 *Step 1: Connect To Your GA4 Data*
-Execute the \`/arnold-connect\` command to sign in with Google and connect your GA4 properties.
+Execute the \`/arnold-connect\` command to sign in using Google OAuth and connect your GA4 properties.
 
 *Step 2: Select a GA4 property*
 Execute the \`/arnold-property\` command. You will then be able to select any GA4 property you have access to here using a dropdown.
