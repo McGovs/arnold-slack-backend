@@ -110,7 +110,7 @@ You can ask Arnold questions in this DM thread, or in any channel after inviting
 
 *Step 4: Create a dedicated channel and invite your colleagues!*
 Arnold works best when your team explores insights together.
-Create a shared channel, (e.g. #arnold-the-analyst), and invite Arnold and your teammates to start getting fast, shared answers from your GA4 data.
+Create a shared channel, (e.g. #arnold-the-analyst), invite Arnold via the \`/invite\` command plus your teammates to start getting fast, shared answers from your GA4 data.
 
 ⛔ Arnold won't work until GA4 is connected. Remember to execute /arnold-connect.
 
