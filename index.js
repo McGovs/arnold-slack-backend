@@ -91,7 +91,7 @@ async function publishHomeView(teamId, userId) {
               elements: [
                 {
                   type: 'mrkdwn',
-                  text: 'Tip: You can ask questions in DMs or mention @Arnold in a channel.'
+                  text: 'Tip: Mention @Arnold before you ask your question.'
                 }
               ]
             }
