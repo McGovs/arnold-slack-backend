@@ -106,7 +106,7 @@ Execute the \`/arnold-property\` command. You will then be able to select any GA
 
 *Step 3: Ask a question using @Arnold*
 You can ask Arnold questions in this DM thread, or in any channel after inviting the app to the channel by using the \`/invite\` command. For example:
-@Arnold how many visits did we have last week?
+"@Arnold how many visits did we have last month?"
 
 *Step 4: Create a dedicated channel and invite your colleagues!*
 Arnold works best when your team explores insights together.
