@@ -63,6 +63,59 @@ async function sendSlackMessage(channel, blocks, teamId = null) {
 }
 
 
+// Home tab helper function
+async function publishHomeView(teamId, userId) {
+  try {
+    const botToken = await getBotToken(teamId);
+    if (!botToken) {
+      console.error(`No bot token found for team ${teamId}`);
+      return;
+    }
+
+    await axios.post(
+      'https://slack.com/api/views.publish',
+      {
+        user_id: userId,
+        view: {
+          type: 'home',
+          blocks: [
+            {
+              type: 'section',
+              text: {
+                type: 'mrkdwn',
+                text: `👋 *Welcome to Arnold*\n\nHit the *Messages* tab at the top to query your *GA4 data* directly in Slack.`
+              }
+            },
+            {
+              type: 'context',
+              elements: [
+                {
+                  type: 'mrkdwn',
+                  text: 'Tip: You can ask questions in DMs or mention @Arnold in a channel.'
+                }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${botToken}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+
+    console.log(`🏠 Home view published for user ${userId}`);
+  } catch (error) {
+    console.error(
+      'Error publishing Home view:',
+      error.response?.data || error.message
+    );
+  }
+}
+
+
 // Send onboarding DM to installing user
 async function sendOnboardingDM(botToken, userId) {
   try {
@@ -1017,6 +1070,18 @@ app.post('/slack/events', async (req, res) => {
   }
   
   res.sendStatus(200);
+
+    if (event && event.type === 'app_home_opened') {
+    const userId = event.user;
+    const teamId = team_id || event.team;
+
+    console.log(`🏠 app_home_opened by user ${userId} in team ${teamId}`);
+
+    // Publish a Home view every time the Home tab is opened
+    await publishHomeView(teamId, userId);
+
+    return;
+  }
   
   if (event && event.type === 'app_mention') {
     const userId = event.user;
